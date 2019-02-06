@@ -303,3 +303,106 @@ class BayesianOptimizer(Optimizer):
         except Exception as e:
             np.savez('failed_bopt_{0}'.format(id(e)), X=self.acquisition.data[0], Y=self.acquisition.data[1])
             raise
+
+class SingleBayesianOptimizer(BayesianOptimizer):
+    """
+    A Bayesian optimization framework for external evaluation of objective functions
+
+    The optimize function will run a single iteration of bayesian optimization. T       
+
+    """
+    def __init__(self, domain, acquisition, optimizer=None, initial=None, scaling=True, hyper_draws=None,
+                 callback=jitchol_callback, verbose=False):
+        """
+        :param Domain domain: The optimization space.
+        :param Acquisition acquisition: The acquisition function to optimize over the domain.
+        :param Optimizer optimizer: (optional) optimization approach for the acquisition function.
+            If not specified, :class:`~.optim.SciPyOptimizer` is used.
+            This optimizer will run on the same domain as the :class:`.BayesianOptimizer` object.
+        :param Design initial: (optional) The initial design of candidates to evaluate
+            before the optimization loop runs. Note that if the underlying model contains already some data from
+            an initial design, it is augmented with the evaluations obtained by evaluating
+            the points as specified by the design.
+        :param bool scaling: (boolean, default true) if set to true, the outputs are normalized, and the inputs are
+            scaled to a unit cube. This only affects model training: calls to acquisition.data, as well as
+            returned optima are unscaled (see :class:`~.DataScaler` for more details.). Note, the models contained by
+            acquisition are modified directly, and so the references to the model outside of BayesianOptimizer now point
+            to scaled models.
+        :param int hyper_draws: (optional) Enable marginalization of model hyperparameters. By default, point estimates are
+            used. If this parameter set to n, n hyperparameter draws from the likelihood distribution
+            are obtained using Hamiltonian MC.
+            (see `GPflow documentation <https://gpflow.readthedocs.io/en/latest//>`_ for details) for each model.
+            The acquisition score is computed for each draw, and averaged.
+        :param callable callback: (optional) this function or object will be called, after the
+            data of all models has been updated with all models as retrieved by acquisition.models as argument without
+            the wrapping model handling any scaling . This allows custom model optimization strategies to be implemented.
+            All manipulations of GPflow models are permitted. Combined with the optimize_restarts parameter of
+            :class:`~.Acquisition` this allows several scenarios: do the optimization manually from the callback
+            (optimize_restarts equals 0), or choose the starting point + some random restarts (optimize_restarts > 0).
+        """
+        super().__init__(domain=domain, acquisition=acquisition, optimizer=optimizer, initial=initial, 
+                         scaling=scaling, hyper_draws=hyper_draws,
+                         callback=jitchol_callback, verbose=verbose)
+
+        
+    def optimize(self):
+        """
+        Run Bayesian optimization for a number of iterations.
+        
+        Each iteration a new data point is selected for evaluation by optimizing an acquisition function.
+        
+        :param n_iter: number of iterations to run
+        :return: OptimizeResult object
+        """
+        result = self._optimize()
+        result.x = np.atleast_2d(result.x)
+        return result
+
+    def _optimize(self):
+        def inverse_acquisition(x):
+            return tuple(map(lambda r: -r, self.acquisition.evaluate_with_gradients(np.atleast_2d(x))))
+
+        # If a callback is specified, and acquisition has the setup flag enabled (indicating an upcoming
+        # compilation), run the callback.
+        with self.silent():
+            if self._model_callback and self.acquisition._needs_setup:
+                self._model_callback([m.wrapped for m in self.acquisition.models])
+
+            result = self.optimizer.optimize(inverse_acquisition)
+            self._update_model_data(result.x, fx(result.x))
+
+        if self.verbose:
+            metrics = []
+
+            with self.silent():
+                bo_result = self._create_bo_result(True, 'Monitor')
+                metrics += ['MLL [' + ', '.join('{:.3}'.format(model.compute_log_likelihood()) for model in self.acquisition.models) + ']']
+
+            # fmin
+            n_points = bo_result.fun.shape[0]
+            if n_points > 0:
+                funs = np.atleast_1d(np.min(bo_result.fun, axis=0))
+                fmin = 'fmin [' + ', '.join('{:.3}'.format(fun) for fun in funs) + ']'
+                if n_points > 1:
+                    fmin += ' (size {0})'.format(n_points)
+
+                metrics += [fmin]
+
+            # constraints
+            n_points = bo_result.constraints.shape[0]
+            if n_points > 0:
+                constraints = np.atleast_1d(np.min(bo_result.constraints, axis=0))
+                metrics += ['constraints [' + ', '.join('{:.3}'.format(constraint) for constraint in constraints) + ']']
+
+            # error messages
+            metrics += [r.message.decode('utf-8') if isinstance(r.message, bytes) else r.message for r in [bo_result, result] if not r.success]
+
+            print('iter #{0:>3} - {1}'.format(
+                i,
+                ' - '.join(metrics)))
+
+        return self._create_bo_result(True, "OK")
+
+
+        
+
