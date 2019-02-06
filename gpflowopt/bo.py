@@ -308,21 +308,18 @@ class SingleBayesianOptimizer(BayesianOptimizer):
     """
     A Bayesian optimization framework for external evaluation of objective functions
 
-    The optimize function will run a single iteration of bayesian optimization. T       
+    The optimize function will run a single iteration of bayesian optimization.      
 
     """
-    def __init__(self, domain, acquisition, optimizer=None, initial=None, scaling=True, hyper_draws=None,
+    def __init__(self, domain, acquisition, optimizer=None, scaling=True, hyper_draws=None,
                  callback=jitchol_callback, verbose=False):
         """
         :param Domain domain: The optimization space.
         :param Acquisition acquisition: The acquisition function to optimize over the domain.
+        :param Candidates candidates: (optional) The 
         :param Optimizer optimizer: (optional) optimization approach for the acquisition function.
             If not specified, :class:`~.optim.SciPyOptimizer` is used.
             This optimizer will run on the same domain as the :class:`.BayesianOptimizer` object.
-        :param Design initial: (optional) The initial design of candidates to evaluate
-            before the optimization loop runs. Note that if the underlying model contains already some data from
-            an initial design, it is augmented with the evaluations obtained by evaluating
-            the points as specified by the design.
         :param bool scaling: (boolean, default true) if set to true, the outputs are normalized, and the inputs are
             scaled to a unit cube. This only affects model training: calls to acquisition.data, as well as
             returned optima are unscaled (see :class:`~.DataScaler` for more details.). Note, the models contained by
@@ -340,16 +337,16 @@ class SingleBayesianOptimizer(BayesianOptimizer):
             :class:`~.Acquisition` this allows several scenarios: do the optimization manually from the callback
             (optimize_restarts equals 0), or choose the starting point + some random restarts (optimize_restarts > 0).
         """
-        super().__init__(domain=domain, acquisition=acquisition, optimizer=optimizer, initial=initial, 
+        super().__init__(domain=domain, acquisition=acquisition, optimizer=optimizer, initial=None, 
                          scaling=scaling, hyper_draws=hyper_draws,
                          callback=jitchol_callback, verbose=verbose)
 
         
     def optimize(self):
         """
-        Run Bayesian optimization for a number of iterations.
+        Run Bayesian optimization for a single iteration
         
-        Each iteration a new data point is selected for evaluation by optimizing an acquisition function.
+        The suggested new data point is selected for evaluation by optimizing an acquisition function.
         
         :param n_iter: number of iterations to run
         :return: OptimizeResult object
@@ -369,7 +366,6 @@ class SingleBayesianOptimizer(BayesianOptimizer):
                 self._model_callback([m.wrapped for m in self.acquisition.models])
 
             result = self.optimizer.optimize(inverse_acquisition)
-            self._update_model_data(result.x, fx(result.x))
 
         if self.verbose:
             metrics = []

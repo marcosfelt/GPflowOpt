@@ -14,7 +14,7 @@
 
 from . import acquisition
 from . import domain
-from .bo import BayesianOptimizer
+from .bo import BayesianOptimizer, SingleBayesianOptimizer
 from . import optim
 from . import design
 from . import transforms
