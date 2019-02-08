@@ -386,6 +386,43 @@ class TestBayesianOptimizerConfigurations(GPflowOptTestCase):
         result = optimizer.optimize(lambda X: parabola2d(X)[0], n_iter=1)
         self.assertTrue(result.success)
 
+class TestSingleBayesianOptimizer(_TestOptimizer, GPflowOptTestCase):
+    def setUp(self):
+        super().setUp()
+        acquisition = gpflowopt.acquisition.ExpectedImprovement(create_parabola_model(self.domain))
+        self.optimizer = gpflowopt.SingleBayesianOptimizer(self.domain, acquisition)
+
+    def test_default_initial(self):
+        pass
+
+    def test_optimize(self):
+        for verbose in [False, True]:
+            with self.test_session():
+                acquisition = gpflowopt.acquisition.ExpectedImprovement(create_parabola_model(self.domain))
+                optimizer = gpflowopt.SingleBayesianOptimizer(self.domain, acquisition, verbose=verbose)
+                result = optimizer.optimize()
+                self.assertTrue(result.success)
+
+    def test_optimize_multi_objective(self):
+        for verbose in [False, True]:
+            with self.test_session():
+                m1, m2 = create_vlmop2_model()
+                acquisition = gpflowopt.acquisition.ExpectedImprovement(m1) + gpflowopt.acquisition.ExpectedImprovement(m2)
+                optimizer = gpflowopt.SingleBayesianOptimizer(self.domain, acquisition, verbose=verbose)
+                result = optimizer.optimize()
+                self.assertTrue(result.success)
+
+    def test_set_domain(self):
+        with self.test_session():
+            with self.assertRaises(AssertionError):
+                super().test_set_domain()
+
+            domain = gpflowopt.domain.ContinuousParameter("x1", -2.0, 2.0) + \
+                     gpflowopt.domain.ContinuousParameter("x2", -2.0, 2.0)
+            self.optimizer.domain = domain
+            expected = gpflowopt.design.LatinHyperCube(16, self.domain).generate() / 4 + 0.5
+            self.assertTrue(np.allclose(expected, self.optimizer.acquisition.models[0].wrapped.X.value))
+    
 
 class TestSilentOptimization(GPflowOptTestCase):
     @contextmanager

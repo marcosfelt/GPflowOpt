@@ -393,8 +393,7 @@ class SingleBayesianOptimizer(BayesianOptimizer):
             # error messages
             metrics += [r.message.decode('utf-8') if isinstance(r.message, bytes) else r.message for r in [bo_result, result] if not r.success]
 
-            print('iter #{0:>3} - {1}'.format(
-                i,
+            print('{0}'.format(
                 ' - '.join(metrics)))
 
         return self._create_bo_result(True, "OK")
