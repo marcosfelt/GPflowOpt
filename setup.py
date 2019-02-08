@@ -30,8 +30,7 @@ else:
     raise RuntimeError("Unable to find version string in %s." % (VERSIONFILE,))
 
 # Dependencies of GPflowOpt
-dependencies = ['numpy>=1.9', 'scipy>=0.16',
-                'gpflow @ https://github.com/GPflow/GPflow/archive/0.5.0.tar.gz']
+dependencies = ['numpy>=1.9', 'scipy>=0.16']
 min_tf_version = '1.0.0'
 
 # Detect if TF is installed or outdated.

@@ -21,7 +21,7 @@ SYSTEM_TEST_DEPS = ('nbconvert', 'nbformat', 'jupyter', 'jupyter_client', 'matpl
 @nox.session
 def unit(session):
     session.install('pytest', 'pytest-cov', *TEST_DEPS)
-    session.install('-e', '.', '--process-dependency-links')
+    session.install('-e', '.')
 
     # Run py.test against the unit tests.
     session.run(
