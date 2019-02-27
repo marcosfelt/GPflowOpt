@@ -93,7 +93,7 @@ class BayesianOptimizer(Optimizer):
         assert hyper_draws is None or hyper_draws > 0
         assert optimizer is None or isinstance(optimizer, Optimizer)
         assert initial is None or isinstance(initial, Design)
-        super(BayesianOptimizer, self).__init__(domain, exclude_gradient=True)
+        super().__init__(domain, exclude_gradient=True)
 
         self._scaling = scaling
         if self._scaling:
@@ -220,7 +220,7 @@ class BayesianOptimizer(Optimizer):
         :return: OptimizeResult object
         """
         fxs = np.atleast_1d(objectivefx)
-        return super(BayesianOptimizer, self).optimize(lambda x: self._evaluate_objectives(x, fxs), n_iter=n_iter)
+        return super().optimize(lambda x: self._evaluate_objectives(x, fxs), n_iter=n_iter)
 
     def _optimize(self, fx, n_iter):
         """
@@ -342,7 +342,7 @@ class SingleBayesianOptimizer(BayesianOptimizer):
                          callback=jitchol_callback, verbose=verbose)
 
         
-    def optimize(self):
+    def optimize(self, n_iter):
         """
         Run Bayesian optimization for a single iteration
         
@@ -351,50 +351,54 @@ class SingleBayesianOptimizer(BayesianOptimizer):
         :param n_iter: number of iterations to run
         :return: OptimizeResult object
         """
-        result = self._optimize()
-        result.x = np.atleast_2d(result.x)
-        return result
+        return self._optimize(n_iter=n_iter)
 
-    def _optimize(self):
+    def _optimize(self, n_iter):
         def inverse_acquisition(x):
             return tuple(map(lambda r: -r, self.acquisition.evaluate_with_gradients(np.atleast_2d(x))))
 
         # If a callback is specified, and acquisition has the setup flag enabled (indicating an upcoming
         # compilation), run the callback.
-        with self.silent():
-            if self._model_callback and self.acquisition._needs_setup:
-                self._model_callback([m.wrapped for m in self.acquisition.models])
-
-            result = self.optimizer.optimize(inverse_acquisition)
-
-        if self.verbose:
-            metrics = []
-
+        for i in range(n_iter):
             with self.silent():
-                bo_result = self._create_bo_result(True, 'Monitor')
-                metrics += ['MLL [' + ', '.join('{:.3}'.format(model.compute_log_likelihood()) for model in self.acquisition.models) + ']']
+                if self._model_callback and self.acquisition._needs_setup:
+                    self._model_callback([m.wrapped for m in self.acquisition.models])
 
-            # fmin
-            n_points = bo_result.fun.shape[0]
-            if n_points > 0:
-                funs = np.atleast_1d(np.min(bo_result.fun, axis=0))
-                fmin = 'fmin [' + ', '.join('{:.3}'.format(fun) for fun in funs) + ']'
-                if n_points > 1:
-                    fmin += ' (size {0})'.format(n_points)
+                result = self.optimizer.optimize(inverse_acquisition)
+                
+                #Use the mean values of model prdictions for y
+                predicted_y = np.array([model.predict_y(np.atleast_2d(result.x))[0][:, 0]
+                                        for model in self.acquisition.models]).T
+                self._update_model_data(result.x, predicted_y)
 
-                metrics += [fmin]
+            if self.verbose:
+                metrics = []
 
-            # constraints
-            n_points = bo_result.constraints.shape[0]
-            if n_points > 0:
-                constraints = np.atleast_1d(np.min(bo_result.constraints, axis=0))
-                metrics += ['constraints [' + ', '.join('{:.3}'.format(constraint) for constraint in constraints) + ']']
+                with self.silent():
+                    bo_result = self._create_bo_result(True, 'Monitor')
+                    metrics += ['MLL [' + ', '.join('{:.3}'.format(model.compute_log_likelihood()) for model in self.acquisition.models) + ']']
 
-            # error messages
-            metrics += [r.message.decode('utf-8') if isinstance(r.message, bytes) else r.message for r in [bo_result, result] if not r.success]
+                # fmin
+                n_points = bo_result.fun.shape[0]
+                if n_points > 0:
+                    funs = np.atleast_1d(np.min(bo_result.fun, axis=0))
+                    fmin = 'fmin [' + ', '.join('{:.3}'.format(fun) for fun in funs) + ']'
+                    if n_points > 1:
+                        fmin += ' (size {0})'.format(n_points)
 
-            print('{0}'.format(
-                ' - '.join(metrics)))
+                    metrics += [fmin]
+
+                # constraints
+                n_points = bo_result.constraints.shape[0]
+                if n_points > 0:
+                    constraints = np.atleast_1d(np.min(bo_result.constraints, axis=0))
+                    metrics += ['constraints [' + ', '.join('{:.3}'.format(constraint) for constraint in constraints) + ']']
+
+                # error messages
+                metrics += [r.message.decode('utf-8') if isinstance(r.message, bytes) else r.message for r in [bo_result, result] if not r.success]
+
+                print('{0}'.format(
+                    ' - '.join(metrics)))
 
         return self._create_bo_result(True, "OK")
 

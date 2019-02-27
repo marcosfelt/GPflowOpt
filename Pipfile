@@ -1,0 +1,27 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+pytest = "*"
+six = "*"
+invoke = "*"
+jupyterlab = "*"
+holoviews = {extras = ["recommended"],version = "==1.11.0"}
+ipdb = "*"
+# gpflowopt = {editable = true,path = ".",extras = ["docs"]}
+bokeh = "*"
+
+[packages]
+gpflow = {git = "https://github.com/GPflow/GPflow.git",ref = "0.5.0"}
+numpy = ">=1.9"
+scipy = ">=0.16"
+tensorflow = ">=1.0.0"
+
+[requires]
+python_version = "3.6"
+
+[scripts]
+setup_jupyter = "invoke setup"
+lab = "jupyter lab --NotebookApp.iopub_data_rate_limit=100000000"
